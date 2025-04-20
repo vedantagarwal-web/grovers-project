@@ -1,0 +1,3 @@
+[console_scripts]
+aer=aer.cli:cli
+
