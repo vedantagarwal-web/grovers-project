@@ -103,9 +103,9 @@ def grover_unencoded(n: int, marked: str, q_queries=2):
         # oracle (phase‑flip the marked basis state)
         for i, bit in enumerate(marked[::-1]):
             if bit == "0": qc.x(q[i])
+        qc.h(q[-1])
         qc.mcx(q[:-1], q[-1])
-        qc.z(q[-1])
-        qc.mcx(q[:-1], q[-1])
+        qc.h(q[-1])
         for i, bit in enumerate(marked[::-1]):
             if bit == "0": qc.x(q[i])
 

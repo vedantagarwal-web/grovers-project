@@ -115,54 +115,60 @@ def with_dd(circ: QuantumCircuit, backend, family: str) -> QuantumCircuit:
 # Main sweep
 # --------------------------------------------------------------------
 def main():
+    """
+    Runs Grover's algorithm experiments for n=2 to 5, computes failure probabilities,
+    and compares with classical bounds.
+    """
     records = []
 
-    for n in [2,3,4,5]:
+    for n in [2, 3, 4, 5]:
         N = 2**n
-        # optimal number of queries
-        qopt = 1 if n == 2 else math.floor((math.pi/4)*math.sqrt(N))
+        # Optimal number of queries for Grover's algorithm
+        qopt = 1 if n == 2 else math.floor((math.pi / 4) * math.sqrt(N))
         marked_states = [format(i, f"0{n}b") for i in range(N)]
 
         for marked in marked_states:
-            # build the appropriate Grover circuit
+            # Build the appropriate Grover circuit
             if n == 2 and USE_ENCODED:
                 qc = grover_encoded(marked, q_queries=qopt)
-                n_phys = 4
+                n_phys = 4  # Encoded case uses 4 physical qubits
             else:
                 qc_raw = grover_unencoded(n, marked, q_queries=qopt)
                 qc = with_dd(qc_raw, backend, family='UR4') if n >= 3 else qc_raw
                 n_phys = n
 
-            # compile & run
+            # Compile and run the circuit
             qc_t = transpile(qc, backend, optimization_level=1)
             result = backend.run(qc_t, shots=20000).result()
             counts = result.get_counts()
 
-            # measurement‐error mitigation
-            if n == 2:
-                mitigated = counts
-            else:
-                mitigated = meas_filter(n_phys)(counts)
-
-            # post‐selection & success‐rate
+            # Apply measurement error mitigation and compute success probability
             if n == 2 and USE_ENCODED:
-                # keep only code‐space outcomes
-                good = {k:v for k,v in mitigated.items() if accept(k)}
+                mitigated = meas_filter(n_phys)(counts)  # Apply mitigation first
+                # Post-selection for encoded case
+                good = {k: v for k, v in mitigated.items() if accept(k)}
                 shots = sum(good.values())
-                hits  = sum(v for k,v in good.items() if logical_outcome(k) == marked)
-                success = hits/shots if shots else 0.0
+                hits = sum(v for k, v in good.items() if logical_outcome(k) == marked)
+                success = hits / shots if shots else 0.0
             else:
-                shots   = sum(mitigated.values())
-                success = mitigated.get(marked, 0)/shots if shots else 0.0
+                mitigated = meas_filter(n_phys)(counts) if n > 2 else counts
+                shots = sum(mitigated.values())
+                success = mitigated.get(marked, 0) / shots if shots else 0.0
 
-            classical = (qopt + 1) / N
+            # Compute failure probability
+            failure = 1 - success
 
+            # Classical bound (optimal classical failure probability)
+            classical_failure = (N - 1) / N  # Uniform distribution assumption
+
+            # Store results
             records.append({
-                'n':        n,
-                'marked':   marked,
-                'success':  success,
-                'classical':classical,
-                'shots':    shots
+                'n': n,
+                'marked': marked,
+                'success': success,  # Added to fix KeyError
+                'failure': failure,
+                'classical': classical_failure,
+                'shots': shots
             })
 
     df = pd.DataFrame(records)
